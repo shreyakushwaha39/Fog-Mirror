@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fog Mirror</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:#0d0c0b; overflow:hidden; }
+  #view { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  video { display:none; }
+
+  #hint {
+    position:fixed; left:0; right:0; bottom:62px;
+    text-align:center;
+    font:15px/1.6 -apple-system,system-ui,sans-serif;
+    color:rgba(255,255,255,.62);
+    letter-spacing:.02em;
+    pointer-events:none;
+    transition:opacity 1.2s ease;
+    text-shadow:0 1px 8px rgba(0,0,0,.5);
+  }
+  #hint b { color:#fff; font-weight:600; }
+  #hint.gone { opacity:0; }
+
+  #status {
+    position:fixed; top:0; left:0; right:0;
+    padding:16px;
+    text-align:center;
+    font:14px/1.6 -apple-system,system-ui,sans-serif;
+    color:rgba(255,255,255,.75);
+    pointer-events:none;
+    transition:opacity .8s ease;
+  }
+  #status.gone { opacity:0; }
+
+  #start {
+    --pink:#F2BECD;                   
+    position:fixed; inset:0;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    background:#0d0c0b;
+    font:16px/1.7 -apple-system,system-ui,sans-serif;
+    color:rgba(255,255,255,.62);
+    --edge:clamp(24px,6vw,64px);
+    --floor:clamp(74px,12vh,132px); 
+    padding:0 var(--edge) var(--floor);
+  }
+  #start h1 {
+    font-size:clamp(40px,8.5vw,64px); line-height:1;
+    color:#fff; font-weight:600; letter-spacing:-.025em;
+  }
+  #start .sig {
+    margin-top:8px;
+    font-family:"Mrs Saint Delafield","Snell Roundhand","Brush Script MT",cursive;
+    font-size:clamp(32px,6vw,44px); line-height:1;
+    color:var(--pink);
+  }
+  #start p { margin-top:18px; max-width:400px; font-size:15px; line-height:1.65; }
+  #start button {
+    margin-top:24px; align-self:flex-start;
+    font:600 15px -apple-system,system-ui,sans-serif;
+    color:#0d0c0b; background:var(--pink);
+    border:0; border-radius:0;
+    padding:14px 34px;
+    cursor:pointer;
+  }
+  #start button:hover { background:#F7D2DD; }
+  #start button:active { transform:translateY(1px); }
+
+  #start small {
+    position:absolute; right:var(--edge); bottom:var(--floor);
+    text-align:right; color:rgba(255,255,255,.52); font-size:12.5px; line-height:2.3;
+    letter-spacing:.02em;
+    animation:keysBlink 2.6s ease-in-out infinite;
+  }
+  #start small kbd {
+    display:inline-block; min-width:22px; margin-right:7px; padding:2px 7px;
+    font:600 11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:#0d0c0b; background:var(--pink); border-radius:2px; vertical-align:1px;
+  }
+  @keyframes keysBlink {
+    0%,100% { opacity:.42 }
+    50%     { opacity:1 }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    #start small { animation:none; opacity:.9 }
+  }
+  @media (max-width:560px) {
+    #start small { position:static; text-align:left; margin-top:26px; }
+  }
+  #start.gone { display:none; }
+
+  #shot {
+    position:fixed; top:16px; right:16px;
+    display:none; align-items:center; justify-content:center;
+    width:38px; height:38px;
+    border:1px solid rgba(255,255,255,.16); border-radius:50%;
+    background:rgba(20,18,16,.34);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    cursor:pointer; opacity:.55; transition:opacity .2s ease, transform .1s ease;
+    padding:0;
+  }
+  #shot:hover { opacity:1; }
+  #shot:active { transform:scale(.93); }
+  #shot.on { display:flex; }
+
+  #flash {
+    position:fixed; inset:0; background:#fff;
+    opacity:0; pointer-events:none;
+  }
+  #flash.pop { animation:pop .32s ease-out; }
+  @keyframes pop { 0%{opacity:.85} 100%{opacity:0} }
+
+  #tool {
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    display:none; align-items:center; gap:11px;
+    padding:7px 15px 7px 12px;
+    border-radius:999px;
+    background:rgba(20,18,16,.34);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,.14);
+    opacity:.55; transition:opacity .25s ease;
+  }
+  #tool:hover { opacity:1; }
+  #tool.on { display:flex; }
+  #tool svg { display:block; opacity:.92; flex:none; }
+  #tool input {
+    -webkit-appearance:none; appearance:none;
+    width:116px; height:3px; border-radius:2px;
+    background:rgba(255,255,255,.34);
+    outline:none; cursor:pointer;
+  }
+  #tool input::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:13px; height:13px; border-radius:50%;
+    background:#fff; cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.45);
+  }
+  #tool input::-moz-range-thumb {
+    width:13px; height:13px; border:0; border-radius:50%;
+    background:#fff; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+<video id="cam" playsinline muted></video>
+
+<div id="status"></div>
+<div id="hint">Pinch <b>thumb and index</b> to draw &nbsp;·&nbsp; <b>make a fist</b> and wipe &nbsp;·&nbsp; hold <b>SPACE</b> or <b>breathe</b> to fog it up again</div>
+
+<div id="flash"></div>
+
+<button id="shot" title="Save a photo (S)">
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 8.5a2 2 0 0 1 2-2h2.2l1.2-2h6.8l1.2 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+    <circle cx="12" cy="13" r="3.6"/>
+  </svg>
+</button>
+
+<div id="tool">
+  <svg width="17" height="17" viewBox="-12 -12 24 24" aria-hidden="true">
+    <path fill="#fff" d="M0-11 Q1.7-1.7 11 0 Q1.7 1.7 0 11 Q-1.7 1.7 -11 0 Q-1.7-1.7 0-11 Z"/>
+  </svg>
+  <input id="size" type="range" min="4" max="40" step="1" aria-label="brush size">
+</div>
+
+<div id="start">
+  <h1>Fog Mirror</h1>
+  <div class="sig">by Shreya Kushwaha</div>
+  <p>Uses your camera and microphone.</p>
+  <button id="go">Start</button>
+  <small><kbd>space</kbd>fog it up<br><kbd>S</kbd>save a photo<br><kbd>C</kbd>wipe it clean<br><kbd>D</kbd>readouts<br><kbd>esc</kbd>come back here</small>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
+<script>
+(() => {
+  'use strict';   
+
+  const CFG = {
+    pinchOn:      0.22,   
+    pinchOff:     0.38,  
+    liftFrames:   2,      
+    lostGrace:    250,   
+    brushRadius:  15,   
+    blur:         18,     
+    brightness:   1.18,  
+    fogTint:      '242,238,231',  
+    frostWhite:   0.62,  
+    fogAlpha:     0.55,   
+
+    wipeOn:        true,
+    fistFingers:   4,    
+    curlRatio:     1.00,  
+    wipeSize:      1.60,  
+    wipeStrength:  0.34,  
+                         
+    wipeStep:      0.5, 
+    wipeMinMove:   1.5, 
+    wipeSoft:      0.60,  
+    wipeMaxJump:   0.30,  
+
+    breathMargin: 0.0025, 
+    breathFull:   0.003,  
+    keyQuiet:     300,   
+    breathReach:  0.43,  
+                         
+    breathDrop:   0.10,   
+    faceEvery:    5,      
+    faceEase:     0.4,    
+    breathRate:   0.36,  
+                          
+    puffs:        12,     
+    breathEvery:  2,      
+    puffBlur:     0.60,   
+    puffBias:     1.3,    
+    puffWide:     1.45,
+    puffRise:     0.18,  
+
+    chase:        0.22,   
+    landmarkEase: 0.45,   
+    jitter:       0.0006, 
+
+    starSize:     15,     
+    starGlow:     1.5,   
+    starGlowA:    0.28,   
+    starChase:    0.55,   
+    starSpin:     0.18,  
+    starFat:      0.46,   
+    ghostSize:    6,      
+    fogCap:       1.0,    
+    noFogWhileDrawing: true 
+  };
+
+  const view   = document.getElementById('view');
+  const vctx   = view.getContext('2d');
+  const cam    = document.getElementById('cam');
+  const hintEl = document.getElementById('hint');
+  const statEl = document.getElementById('status');
+  const startEl= document.getElementById('start');
+
+  const fog    = document.createElement('canvas');
+  const fctx   = fog.getContext('2d');
+
+  const frost  = document.createElement('canvas');
+  const rctx   = frost.getContext('2d');
+
+  let W = 0, H = 0, S = 1, running = false, analyser = null, audioBuf = null;
+  let faceDet = null, frame = 0, audioCtx = null, lastLvl = 0, noiseFloor = 0.004, lastGate = 0,
+      faceAt = 0, lastPinch = 0, freqBuf = null,  lastKeyAt = 0,
+      ready = false, errShown = false, faceErr = '',
+      micPeak = 0, spaceDown = false,
+      debug = false, fps = 0, fpsT = 0, fpsN = 0;
+  let mouth = null;         
+  const down   = new Map(); 
+  const offCount = new Map(); 
+  const marks  = new Map();  
+
+  function say(t, keep) {
+    statEl.textContent = t;
+    statEl.classList.remove('gone');
+    if (!keep) setTimeout(() => statEl.classList.add('gone'), 2600);
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    S = dpr;                              
+    W = Math.floor(innerWidth * dpr);
+    H = Math.floor(innerHeight * dpr);
+    view.width = W; view.height = H;
+    view.style.width = innerWidth + 'px';
+    view.style.height = innerHeight + 'px';
+    const old = document.createElement('canvas');
+    if (fog.width) { old.width = fog.width; old.height = fog.height; old.getContext('2d').drawImage(fog, 0, 0); }
+    fog.width = W; fog.height = H;
+    frost.width = W; frost.height = H;
+    if (old.width) fctx.drawImage(old, 0, 0, W, H);
+    else fillFog(CFG.fogAlpha);
+  }
+
+  function drawMirrored(ctx) {
+    ctx.save();
+    ctx.translate(W, 0); ctx.scale(-1, 1);
+    const vr = cam.videoWidth / cam.videoHeight, cr = W / H;
+    let dw = W, dh = H, dx = 0, dy = 0;
+    if (vr > cr) { dw = H * vr; dx = (W - dw) / 2; } else { dh = W / vr; dy = (H - dh) / 2; }
+    ctx.drawImage(cam, dx, dy, dw, dh);
+    ctx.restore();
+  }
+
+  function fillFog(a) {
+    fctx.globalCompositeOperation = 'source-over';
+    fctx.fillStyle = `rgba(${CFG.fogTint},${a})`;
+    fctx.fillRect(0, 0, W, H);
+  }
+
+  function breathe(strength) {
+    const cx = mouth ? mouth.x : W / 2;
+    const cy = (mouth ? mouth.y : H * 0.45) + H * CFG.breathDrop;
+    const s  = Math.min(1, Math.max(0, strength));             
+    const reach = Math.min(W, H) * CFG.breathReach * (0.6 + s * 0.7);  
+
+    fctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < CFG.puffs; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.pow(Math.random(), CFG.puffBias) * reach;
+      const px = cx + Math.cos(ang) * dist * CFG.puffWide;
+      const py = cy + Math.sin(ang) * dist - dist * CFG.puffRise;
+      const r  = reach * (0.16 + Math.random() * 0.26);
+      const a  = CFG.breathRate * (0.3 + s * 0.7) * (0.45 + Math.random() * 0.55);
+
+      fctx.filter = `blur(${Math.max(2, r * CFG.puffBlur)}px)`;
+      const g = fctx.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0,    `rgba(${CFG.fogTint},${a})`);
+      g.addColorStop(0.5,  `rgba(${CFG.fogTint},${a * 0.55})`);
+      g.addColorStop(1,    `rgba(${CFG.fogTint},0)`);
+      fctx.fillStyle = g;
+      fctx.beginPath(); fctx.arc(px, py, r, 0, Math.PI * 2); fctx.fill();
+    }
+    fctx.filter = 'none';
+  }
+
+  function eraseTo(p, x, y) {
+    fctx.globalCompositeOperation = 'destination-out';
+    fctx.strokeStyle = 'rgba(0,0,0,1)';
+    fctx.lineWidth = CFG.brushRadius * 2 * S;
+    fctx.lineCap = 'round';
+    fctx.lineJoin = 'round';
+
+    if (p.lx === undefined) {                 
+      fctx.beginPath();
+      fctx.arc(x, y, CFG.brushRadius * S, 0, Math.PI * 2);
+      fctx.fill();
+      p.lx = x; p.ly = y; p.mx = x; p.my = y;
+    } else {
+      const mx = (p.lx + x) / 2, my = (p.ly + y) / 2;
+      fctx.beginPath();
+      fctx.moveTo(p.mx, p.my);
+      fctx.quadraticCurveTo(p.lx, p.ly, mx, my);
+      fctx.stroke();
+      p.mx = mx; p.my = my; p.lx = x; p.ly = y;
+    }
+    fctx.globalCompositeOperation = 'source-over';
+  }
+
+  const wipeAt = new Map();          
+
+  function palmInfo(lm) {
+    let sx = 0, sy = 0;
+    for (const i of [0, 5, 9, 13, 17]) { sx += lm[i].x; sy += lm[i].y; }   
+    const cx = (1 - sx / 5) * W, cy = (sy / 5) * H;                        
+
+    const knuck = Math.hypot((lm[5].x - lm[17].x) * W, (lm[5].y - lm[17].y) * H);
+    const back  = Math.hypot((lm[0].x - lm[9].x)  * W, (lm[0].y - lm[9].y)  * H);
+    const span  = Math.max(knuck, back * 0.72) || 60 * S;
+    return { cx, cy, span };
+  }
+
+  const PIP = { 8: 6, 12: 10, 16: 14, 20: 18 };
+
+  function curledCount(lm) {
+    let n = 0;
+    for (const tip of [8, 12, 16, 20]) {
+      const dt = Math.hypot(lm[tip].x - lm[0].x, lm[tip].y - lm[0].y);
+      const dp = Math.hypot(lm[PIP[tip]].x - lm[0].x, lm[PIP[tip]].y - lm[0].y);
+      if (dt < dp * CFG.curlRatio) n++;
+    }
+    return n;
+  }
+  function isFist(lm)  { return curledCount(lm) >= CFG.fistFingers; }
+
+  function indexOut(lm) {
+    return Math.hypot(lm[8].x - lm[0].x, lm[8].y - lm[0].y)
+         > Math.hypot(lm[6].x - lm[0].x, lm[6].y - lm[0].y) * 1.05;
+  }
+
+  function wipeWithPalm(key, lm) {
+    const { cx, cy, span } = palmInfo(lm);
+    const prev = wipeAt.get(key);
+    if (!prev) { wipeAt.set(key, { x: cx, y: cy, carry: 0 }); return; }   
+
+    const dx = cx - prev.x, dy = cy - prev.y;
+    const move = Math.hypot(dx, dy);
+    if (move > CFG.wipeMaxJump * W) {                   
+      wipeAt.set(key, { x: cx, y: cy, carry: 0 });
+      return;
+    }
+    if (move < CFG.wipeMinMove * S) {            
+      wipeAt.set(key, { x: cx, y: cy, carry: prev.carry });
+      return;
+    }
+
+    const r = span * CFG.wipeSize;
+    const stepLen = r * CFG.wipeStep;
+    let carry = prev.carry + move;
+    if (carry < stepLen) {                              
+      wipeAt.set(key, { x: cx, y: cy, carry });
+      return;
+    }
+    const n = Math.min(40, Math.floor(carry / stepLen));
+    wipeAt.set(key, { x: cx, y: cy, carry: carry - n * stepLen });
+
+    const a = CFG.wipeStrength;
+    fctx.save();
+    fctx.globalCompositeOperation = 'destination-out';
+    for (let i = 1; i <= n; i++) {
+      const x = prev.x + dx * (i / n), y = prev.y + dy * (i / n);
+      const g = fctx.createRadialGradient(x, y, r * (1 - CFG.wipeSoft), x, y, r);
+      g.addColorStop(0, `rgba(0,0,0,${a})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      fctx.fillStyle = g;
+      fctx.beginPath(); fctx.arc(x, y, r, 0, Math.PI * 2); fctx.fill();
+    }
+    fctx.restore();
+  }
+
+  function star(x, y, size, alpha, spin) {
+    vctx.save();
+    vctx.translate(x, y);
+    vctx.rotate(spin);
+    if (CFG.starGlow > 0) {
+      const gr = size * CFG.starGlow;
+      const g = vctx.createRadialGradient(0, 0, 0, 0, 0, gr);
+      g.addColorStop(0, `rgba(255,255,255,${alpha * CFG.starGlowA})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      vctx.fillStyle = g;
+      vctx.beginPath(); vctx.arc(0, 0, gr, 0, Math.PI * 2); vctx.fill();
+    }
+
+    vctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    vctx.beginPath();
+    for (let i = 0; i < 4; i++) {                 
+      const a = i * Math.PI / 2;
+      vctx.moveTo(0, 0);
+      vctx.quadraticCurveTo(Math.cos(a - .35) * size * CFG.starFat, Math.sin(a - .35) * size * CFG.starFat,
+                            Math.cos(a) * size, Math.sin(a) * size);
+      vctx.quadraticCurveTo(Math.cos(a + .35) * size * CFG.starFat, Math.sin(a + .35) * size * CFG.starFat, 0, 0);
+    }
+    vctx.fill();
+    vctx.restore();
+  }
+
+  function dot(x, y, r) {
+    vctx.beginPath();
+    vctx.arc(x, y, r, 0, Math.PI * 2);
+    vctx.strokeStyle = 'rgba(255,255,255,.32)';
+    vctx.lineWidth = 1.4 * S;
+    vctx.stroke();
+  }
+
+  function micLevel() {
+    if (!analyser) return 0;
+    analyser.getByteTimeDomainData(audioBuf);
+    let sum = 0;
+    for (let i = 0; i < audioBuf.length; i++) {
+      const v = (audioBuf[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / audioBuf.length);
+  }
+
+  function onHands(res) {
+    if (!res.multiHandLandmarks || !res.multiHandLandmarks.length) { marks.clear(); return; }
+    const seen = new Set();
+    res.multiHandLandmarks.forEach((lm, i) => {
+      seen.add(i);
+      const t = lm[4], f = lm[8];
+   
+      const palm = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 0.12;
+      const d = Math.hypot(t.x - f.x, t.y - f.y) / palm;
+      const fist = CFG.wipeOn && isFist(lm);
+      const was = down.get(i) || false;
+    
+      const rawOn = was ? (d < CFG.pinchOff && !fist)
+                        : (d < CFG.pinchOn && !fist && indexOut(lm));
+    
+      const off = offCount.get(i) || 0;
+      const nowOff = rawOn ? 0 : off + 1;
+      offCount.set(i, nowOff);
+      const now = rawOn || nowOff < CFG.liftFrames;
+      down.set(i, now);
+
+      const x = (1 - (t.x + f.x) / 2) * W;
+      const y = ((t.y + f.y) / 2) * H;
+
+      lastPinch = d;
+
+      if (fist) {
+        wipeWithPalm(i, lm);
+        hintEl.classList.add('gone');
+      } else {
+        wipeAt.delete(i);
+      }
+
+      const m = marks.get(i);
+      if (m) {
+  
+        const sx = m.tx + (x - m.tx) * CFG.landmarkEase;
+        const sy = m.ty + (y - m.ty) * CFG.landmarkEase;
+        if (Math.hypot(sx - m.tx, sy - m.ty) > CFG.jitter * W) { m.tx = sx; m.ty = sy; }
+        m.on = now;
+      } else {
+        marks.set(i, { tx: x, ty: y, x, y, sx: x, sy: y, on: now });
+      }
+      marks.get(i).seenAt = performance.now();
+      marks.get(i).live = true;
+      if (now) hintEl.classList.add('gone');
+    });
+    
+    const t0 = performance.now();
+    for (const [k, m] of marks) {
+      if (seen.has(k)) continue;
+      m.live = false;              
+      wipeAt.delete(k);              
+      if (t0 - (m.seenAt || 0) > CFG.lostGrace) marks.delete(k);
+    }
+  }
+
+
+  function onFace(res) {
+    const d = res.detections && res.detections[0];
+    if (!d) return;
+    const kp = d.landmarks || (d.boundingBox ? null : null);
+    let mx, my;
+    if (kp && kp.length >= 4) {
+      mx = (kp[0].x + kp[1].x) / 2;
+      my = (kp[0].y + kp[1].y) / 2 + (kp[3] ? (kp[3].y - (kp[0].y + kp[1].y) / 2) * 0.9 : 0.08);
+    } else if (d.boundingBox) {
+      mx = d.boundingBox.xCenter;
+      my = d.boundingBox.yCenter + d.boundingBox.height * 0.28;
+    } else return;
+    faceAt = performance.now();
+    const nx = (1 - mx) * W, ny = my * H;
+    mouth = mouth ? { x: mouth.x + (nx - mouth.x) * CFG.faceEase, y: mouth.y + (ny - mouth.y) * CFG.faceEase }
+                  : { x: nx, y: ny };
+  }
+
+  function draw() {
+    if (!running) return;
+    requestAnimationFrame(draw);
+    if (cam.readyState < 2) return;
+
+    vctx.filter = 'none';
+    drawMirrored(vctx);
+
+    const lvl = micLevel();
+    lastLvl = lvl;
+
+    micPeak = Math.max(lvl, micPeak - 0.00008);
+
+    noiseFloor += (lvl < noiseFloor ? (lvl - noiseFloor) * 0.05 : (lvl - noiseFloor) * 0.0008);
+    const gate = noiseFloor + CFG.breathMargin;
+    lastGate = gate;
+    let drawing = false;
+    for (const m of marks.values()) if (m.on) drawing = true;
+
+    const notJustTyped = performance.now() - lastKeyAt > CFG.keyQuiet;
+
+    if (spaceDown && (frame % CFG.breathEvery) === 0) breathe(1);   
+    else if (lvl > gate && notJustTyped && (frame % CFG.breathEvery) === 0
+        && !(CFG.noFogWhileDrawing && drawing))
+      breathe((lvl - gate) / CFG.breathFull);
+
+    for (const m of marks.values()) {
+      m.x += (m.tx - m.x) * CFG.chase;
+      m.y += (m.ty - m.y) * CFG.chase;
+      m.sx += (m.tx - m.sx) * CFG.starChase;  
+      m.sy += (m.ty - m.sy) * CFG.starChase;
+      if (m.on) eraseTo(m, m.x, m.y);
+      else { m.lx = undefined; m.mx = undefined; }
+    }
+
+    rctx.globalCompositeOperation = 'source-over';
+    rctx.clearRect(0, 0, W, H);
+    rctx.filter = `blur(${CFG.blur * S}px) brightness(${CFG.brightness}) saturate(0.82)`;
+    drawMirrored(rctx);
+    rctx.filter = 'none';
+    if (CFG.frostWhite > 0) {
+      rctx.fillStyle = `rgba(${CFG.fogTint},${CFG.frostWhite})`;
+      rctx.fillRect(0, 0, W, H);
+    }
+    rctx.globalCompositeOperation = 'destination-in';  
+    rctx.drawImage(fog, 0, 0);
+    rctx.globalCompositeOperation = 'source-over';
+
+    vctx.globalAlpha = CFG.fogCap;
+    vctx.drawImage(frost, 0, 0);
+    vctx.globalAlpha = 1;
+
+    if (debug) {
+      fpsN++;
+      const now = performance.now();
+      if (now - fpsT > 500) { fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now; }
+      const bar = Math.round(Math.min(1, lastLvl / 0.05) * 24);
+      vctx.font = `600 ${13 * S}px ui-monospace,Menlo,monospace`;
+      vctx.fillStyle = 'rgba(0,0,0,.55)';
+      vctx.fillRect(12 * S, 12 * S, 860 * S, 72 * S);
+      vctx.fillStyle = '#fff';
+      vctx.fillText('mic ' + lastLvl.toFixed(4) + '  peak3s ' + micPeak.toFixed(4) + '  gate ' + lastGate.toFixed(4)
+        + (lastLvl > lastGate ? '  FOGGING' : '  quiet'), 24 * S, 34 * S);
+      vctx.fillText('     [' + '#'.repeat(bar) + '.'.repeat(24 - bar) + ']', 24 * S, 54 * S);
+      const faceOK = performance.now() - faceAt < 700;
+      if (faceErr) { vctx.fillStyle = '#ffb4a8'; vctx.fillText('face error: ' + faceErr, 24 * S, 94 * S); vctx.fillStyle = '#fff'; }
+      vctx.fillText('audio ' + (audioCtx ? audioCtx.state : 'none') + '   hands ' + marks.size
+        + '   face ' + (faceOK ? 'LOCKED' : 'lost') + '   ' + fps + ' fps', 24 * S, 74 * S);
+
+    }
+
+    const spin = performance.now() / 1000 * CFG.starSpin;
+    for (const m of marks.values()) {
+      if (!m.live) continue;
+      if (m.on) star(m.sx, m.sy, CFG.starSize * S, .95, spin);
+      else if (CFG.ghostSize > 0) dot(m.sx, m.sy, CFG.ghostSize * S);
+    }
+  }
+
+  let started = false;
+
+  function toStart() {
+    if (!started) return;
+    running = false;                 
+    down.clear(); offCount.clear(); marks.clear(); wipeAt.clear();
+    spaceDown = false; mouth = null;
+    if (W) { fctx.clearRect(0, 0, W, H); fillFog(CFG.fogAlpha); }
+    startEl.classList.remove('gone');
+    document.getElementById('tool').classList.remove('on');
+    document.getElementById('shot').classList.remove('on');
+    statEl.classList.add('gone');
+  }
+
+  async function start() {
+    startEl.classList.add('gone');
+    document.getElementById('tool').classList.add('on');
+    document.getElementById('shot').classList.add('on');
+    if (started) {                 
+      if (!running) { running = true; resize(); draw(); }
+      return;
+    }
+    started = true;
+    say('Opening camera…', true);
+    resize();
+
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: 'user' },
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+      cam.srcObject = s;
+      await cam.play();
+
+      if (s.getAudioTracks().length) {
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        if (ac.state === 'suspended') { try { await ac.resume(); } catch (_) {} }
+        analyser = ac.createAnalyser();
+        analyser.fftSize = 1024;
+        audioBuf = new Uint8Array(analyser.fftSize);
+        freqBuf = new Uint8Array(analyser.frequencyBinCount);
+        ac.createMediaStreamSource(s).connect(analyser);
+        audioCtx = ac;
+      }
+    } catch (e) {
+      say('Camera blocked (' + e.name + '). The address has to be localhost, file:// will not work.', true);
+      started = false;               
+      startEl.classList.remove('gone');
+      document.getElementById('tool').classList.remove('on');
+      document.getElementById('shot').classList.remove('on');
+      return;
+    }
+
+    const hands = new Hands({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`
+    });
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+    hands.onResults(onHands);
+
+    faceDet = new FaceDetection({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${f}`
+    });
+    faceDet.setOptions({ model: 'short', minDetectionConfidence: 0.5 });
+    faceDet.onResults(onFace);
+
+    running = true;
+    draw();
+
+    const loop = new Camera(cam, {
+      onFrame: async () => {
+        if (!running) return;      
+        try {
+          await hands.send({ image: cam });
+          if (!ready) { ready = true; say('Ready'); }
+        } catch (e) { if (!errShown) { errShown = true; say('hands: ' + e.message, true); console.error(e); } }
+
+        if ((frame++ % CFG.faceEvery) === 0 && faceDet) {
+          try { await faceDet.send({ image: cam }); }
+          catch (e) { if (!faceErr) { faceErr = e.message; console.error('face', e); } }
+        }
+      },
+      width: 640, height: 360
+    });
+    loop.start();
+  }
+
+  addEventListener('resize', () => { if (running) resize(); });
+  addEventListener('keyup', e => { if (e.code === 'Space') spaceDown = false; });
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape') { toStart(); return; }
+    if (e.code === 'Space') { spaceDown = true; e.preventDefault(); return; }
+    lastKeyAt = performance.now();  
+    const k = e.key.toLowerCase();
+    if (k === 'c') fctx.clearRect(0, 0, W, H);
+    if (k === 'f') fillFog(0.35);
+    if (k === 's') { snap(); return; }
+    if (k === 'd') { debug = !debug; fpsT = performance.now(); fpsN = 0; }
+  });
+ 
+  let shooting = false;
+  function snap() {
+    if (!running || shooting) return;
+    shooting = true;
+    const wasDebug = debug;
+    debug = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try {
+        const a = document.createElement('a');
+        const t = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        a.download = `fog-mirror ${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())} `
+                   + `${pad(t.getHours())}.${pad(t.getMinutes())}.${pad(t.getSeconds())}.png`;
+        a.href = view.toDataURL('image/png');
+        a.click();
+        const f = document.getElementById('flash');
+        f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
+      } catch (e) { say('save failed: ' + e.message); }
+      debug = wasDebug;
+      shooting = false;
+    }));
+  }
+  document.getElementById('shot').addEventListener('click', snap);
+
+
+  const sizeEl = document.getElementById('size');
+  sizeEl.value = CFG.brushRadius;
+  sizeEl.addEventListener('input', () => { CFG.brushRadius = +sizeEl.value; });
+
+  document.getElementById('go').addEventListener('click', () => {
+    try { if (window.umami) window.umami.track('mirror-start'); } catch (e) {}
+    start();
+  });
+
+  window.__fog = {
+    toStart, start, fillFog, isFist, curledCount, indexOut, palmInfo, wipeWithPalm,
+    feed(list) { onHands({ multiHandLandmarks: list }); },
+    get down() { return down; },
+    get wipeAt() { return wipeAt; },
+    get fogCanvas() { return fog; },
+    get running() { return running; },
+    get started() { return started; },
+    get size() { return { W, H, S }; },
+    CFG
+  };
+})();
+</script>
+<script defer src="https://cloud.umami.is/script.js" data-website-id="08f79d3c-0332-46a7-a521-bf9a4cdc69e4"></script>
+<!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "6a2212dd2f1246fba139d6b849f663c6"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
